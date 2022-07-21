@@ -20,11 +20,11 @@ I used the following hardware in this project:
 * [Kinesis](https://kinesis-ergo.com/) Freestyle2 ergonomic keyboard for PC
 * [Anker](https://us.anker.com/) 2.4G wireless vertical ergonomic optical mouse
 
-And I used the following software. All software versions here specified were those installed at the declaration of project complete, 31 March 2022:
+And I used the following software. All software versions here specified were those installed at the declaration of project complete 20 July 2022:
 
-* [Ubuntu Linux](https://ubuntu.com/) (version 21.10)
-* [Java JDK](https://www.java.com/en/) (version 11.0.14)
-* [IntelliJ IDEA Community Edition](https://www.jetbrains.com/idea/) (version 2021.3.3)
+* [Ubuntu Linux](https://ubuntu.com/) (version 22.04)
+* [Java JDK](https://www.java.com/en/) (version 11.0.15)
+* [IntelliJ IDEA Community Edition](https://www.jetbrains.com/idea/) (version 2022.1.4)
 * [Ant Build Generation Plugin](https://plugins.jetbrains.com/plugin/14169-ant-build-generation) (version 203.4)
 * [Apache Ant](https://ant.apache.org/)
 * [GitHub](https://github.com/)
