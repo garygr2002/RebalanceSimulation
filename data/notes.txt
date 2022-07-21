@@ -1,0 +1,61 @@
+Datasets for federal funds, inflation, and 10-year treasury yields are
+downloaded from Macrotrends: https://www.macrotrends.net/
+
+Alternate inflation data downloaded by cut-and-paste from:
+https://www.usinflationcalculator.com/inflation/historical-inflation-rates/
+
+Treasury bill secondary data is downloaded from:
+https://fred.stlouisfed.org/series/DTB3
+
+Dataset for S&P valuation entered by cut-and-paste from:
+https://www.multpl.com/s-p-500-historical-prices/table/by-month
+
+Dataset for S&P dividend yields from:
+https://www.nasdaq.com/market-activity/funds-and-etfs/spy/dividend-history
+
+Federal Funds:		    1954-07 to 2022-06	Daily
+Inflation:		        1914-12 to 2021-12	Annual
+Alternate Inflation:	1914-01 to 2021-12	Monthly
+Treasury Bill:		    1954-01 to 2022-06	Daily
+10-Year Treasury:	    1962-01 to 2022-06	Daily
+S&P 500	Valuation:		1961-01 to 2022-06	Monthly
+S&P 500 Dividend:       1871-01 to 2022-06  Monthly
+
+Suggest using:
+
+1. Federal Funds, or Treasury Bill for cash investment yields
+2. 10-year Treasury for bond yields, and bond investment price
+3. S&P 500 Valuation for stock investment price
+4. S&P 500 Dividend for stock yields
+5. Alternate Inflation for inflation
+
+Goal is a single library, indexed by year, month and first day of month.
+
+Fields in a monthly data object will be:
+
+1. S&P 500 Valuation at the start of the month
+2. S&P 500 Valuation at the end of the month
+3. S&P 500 Dividend yield at the start of the month
+4. S&P 500 Dividend yield at the end of the month
+5. 10-year Treasury at the start of the month
+6. 10-year Treasury at the end of the month
+7. Federal Funds on the 1st available day of the month
+8. Treasury Bill average for the month
+9. The rate of inflation
+
+Simulation will run from 1962-01 to 2021-12.  The initial all-time high for
+the S&P 500 appears to be: 72.64 on 12/12/1961, but instead use the 71.74 close
+on 12/01/1961.  With an initial portfolio of $1,000,000.00 in January 1962,
+you would need it to be worth $9,678,675.50 by January 2022 to have the same
+value.  This is due to 867.9% inflation.
+
+Suggested simulation parameters:
+1. Discretionary withdraw between 0.03 and 0.049 annually, vary by 0.01 for 20
+2. Fixed withdraw between 0.03 and 0.049 annually, vary by 0.01 for 20
+3. Market high between 40.0 and 69.0 vary by 0.1 for 465 together with (4)
+4. Market bear between market high plus one and 70 by 0.1 for 465 together with
+   (3)
+5. Advance threshold between 0.05 and 0.24 by 0.01 for 20
+6. Decline threshold between -0.02 and -0.11 by -0.01 for 10
+
+Total of 37,200,000 observations.
