@@ -1,1 +1,6 @@
 /out/
+/.RData
+/.Rhistory
+/.idea/
+/.Rproj.user/
+/RebalanceSimulation.Rproj
