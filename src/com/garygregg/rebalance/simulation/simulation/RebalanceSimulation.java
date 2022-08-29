@@ -5,15 +5,10 @@ import com.garygregg.rebalance.simulation.data.MonthlyData;
 import com.garygregg.rebalance.simulation.fund.Portfolio;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
-import java.util.Random;
 
 public class RebalanceSimulation {
 
@@ -29,43 +24,12 @@ public class RebalanceSimulation {
     // Our currency formatter
     private static final NumberFormat currencyFormatter =
             NumberFormat.getCurrencyInstance(locale);
-    // The zeroth simulation
-    private static final Runnable simulation0 =
-            RebalanceSimulation::runSimulation0;
+
     /*
      * The remainder of a portfolio not allocated to stocks that is allocated
      * to bonds
      */
     private static final double remainderFractionBond = 2. / 3.;
-
-    // Our random number generator
-    private static final Random rng = new Random(0x74969d18);
-
-    // The highest stock allocation with which we are comfortable
-    private static final double stockHigh = 0.7;
-
-    // For floating-point output rounded to two places
-    private static final DecimalFormat twoDigitFormat =
-            new DecimalFormat("0.00");
-
-    // The start of the simulation run
-    private static Date start;
-
-    // The first simulation
-    private static final Runnable simulation1 =
-            RebalanceSimulation::runSimulation1;
-
-    // The second simulation
-    private static final Runnable simulation2 =
-            RebalanceSimulation::runSimulation2;
-
-    // The third simulation
-    private static final Runnable simulation3 =
-            RebalanceSimulation::runSimulation3;
-
-    // An array with the simulations
-    private static final Runnable[] simulations =
-            new Runnable[]{simulation0, simulation1, simulation2, simulation3};
 
     // A hyperbolic adjuster for rebalancing
     private final HyperbolicAdjuster adjuster = new HyperbolicAdjuster();
@@ -88,8 +52,8 @@ public class RebalanceSimulation {
     // The decline threshold for rebalancing
     private double declineThreshold;
 
-    // The discretionary annual percent of the portfolio for withdraw
-    private double discretionary = 0.04 /
+    // The discretionary annual percent of the portfolio for addition
+    private double discretionary = -0.04 /
             Database.getMonthCount();
 
     // The discretionary draw portion
@@ -98,8 +62,8 @@ public class RebalanceSimulation {
     // The end date for the simulation
     private Date end;
 
-    // The fixed annual percent of the portfolio for withdraw (with COLA)
-    private double fixed = 0.04 / Database.getMonthCount();
+    // The fixed annual percent of the portfolio for addition (with COLA)
+    private double fixed = -0.04 / Database.getMonthCount();
 
     // The fixed draw portion
     private double fixedPortion;
@@ -118,446 +82,12 @@ public class RebalanceSimulation {
     }
 
     /**
-     * Returns the count of simulations.
+     * Gets the initial portfolio value.
      *
-     * @return The count of simulations
+     * @return The initial portfolio value
      */
-    public static int getSimulationCount() {
-        return simulations.length;
-    }
-
-    /**
-     * Tests the simulation.
-     *
-     * @param arguments Command line arguments
-     */
-    public static void main(@NotNull String @NotNull [] arguments) {
-
-        // Is there at least one argument?
-        if (0 < arguments.length) {
-
-            /*
-             * There is at least one argument. Declare and initialize a
-             * simulation index.
-             */
-            int simulationIndex = 0;
-            try {
-
-                /*
-                 * Try to parse the simulation index from the first command
-                 * line argument, and run the corresponding simulation.
-                 */
-                simulations[simulationIndex =
-                        Integer.parseInt(arguments[0])].run();
-            }
-
-            /*
-             * Catch an exception resulting from simulation not corresponding
-             * to the given index.
-             */ catch (@NotNull ArrayIndexOutOfBoundsException exception) {
-                System.err.printf("Cannot call simulation with index %d; " +
-                                "there are only %d simulations.%n",
-                        simulationIndex, getSimulationCount());
-            }
-
-            /*
-             * Catch an exception resulting from the first argument not
-             * parseable as an integer.
-             */ catch (@NotNull NumberFormatException exception) {
-                System.err.printf("The argument '%s' cannot be parsed as a " +
-                        "simulation index.%n", arguments[0]);
-            }
-        }
-
-        // There are no arguments.
-        else {
-            System.err.printf("The rebalance simulation requires a integer " +
-                            "argument between 0 and %d.%n",
-                    getSimulationCount());
-        }
-    }
-
-    /**
-     * Runs a simulation, and write about the result.
-     *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive simulation parameters and output
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void runAndWrite(@NotNull RebalanceSimulation simulation,
-                                    @NotNull FileWriter writer)
-            throws IOException {
-
-        /*
-         * Clear the draw in the simulation. Run the simulation, and output
-         * results.
-         */
-        simulation.clearDraw();
-        writer.write(String.format("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%s\n",
-                simulation.getDiscretionary(),
-                simulation.getFixed(),
-                simulation.getHigh(),
-                simulation.getBear(),
-                simulation.getAdvanceThreshold(),
-                simulation.getDeclineThreshold(),
-                twoDigitFormat.format(simulation.run(false)),
-                twoDigitFormat.format(simulation.getDraw())));
-    }
-
-    /**
-     * Runs simulations by randomly choosing the high and bear parameters
-     * within a range, this some fixed number of times.
-     *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive simulation parameters and output
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void runRandomHighAndBear(
-            @NotNull RebalanceSimulation simulation,
-            @NotNull FileWriter writer) throws IOException {
-
-        // Declare local variables.
-        double high;
-        Date now;
-
-        // Cycle the required number of iterations.
-        final int reportThreshold = 15840, iterations = reportThreshold * 100;
-        for (int i = 0; i < iterations; ++i) {
-
-            // Generate, and set a random market high.
-            high = rng.nextDouble() * 0.15 + 0.40;
-            simulation.setHigh(high);
-
-            // Generate, and set a market bear.
-            simulation.setBear(rng.nextDouble() * (simulation.getZero() - high)
-                    + high);
-
-            /*
-             * Run the simulation, and write about it. Is the iteration count
-             * at a report threshold?
-             */
-            runAndWrite(simulation, writer);
-            if (0 == (i % reportThreshold)) {
-
-                /*
-                 * The iteration count is at a report threshold. Do a
-                 * checkpoint.
-                 */
-                now = new Date();
-                System.out.printf("Iteration %d; Time: %s seconds%n", i,
-                        twoDigitFormat.format((now.getTime() -
-                                start.getTime()) / 1000.));
-            }
-        }
-    }
-
-    /**
-     * Runs one simulation.
-     */
-    @SuppressWarnings("unused")
-    private static void runSimulation() {
-
-        /*
-         * Create a rebalance simulation. Get the count of months.
-         */
-        final RebalanceSimulation simulation = new RebalanceSimulation();
-        final int monthCount = Database.getMonthCount();
-
-        // Set discretionary and fixed.
-        simulation.setDiscretionary(0.018);
-        simulation.setFixed(0.018);
-
-        // Set the rebalance thresholds.
-        simulation.setAdvanceThreshold(0.10);
-        simulation.setDeclineThreshold(-0.03);
-
-        // Set the high market allocation and the zero market allocation.
-        simulation.setHigh(0.45);
-        simulation.setZero(0.70);
-
-        // Set the bear market allocation, and run the simulation.
-        simulation.setBear(0.575);
-        simulation.run(true);
-
-        // Display the total draw.
-        System.out.printf("The total draw is: %s%n",
-                currencyFormatter.format(simulation.getDraw()));
-    }
-
-    /**
-     * Runs the zeroth simulation.
-     */
-    private static void runSimulation0() {
-        runSimulation();
-    }
-
-    /**
-     * Runs the first simulation.
-     */
-    private static void runSimulation1() {
-        runSimulations(false);
-    }
-
-    /**
-     * Runs the second simulation.
-     */
-    private static void runSimulation2() {
-        runSimulations(true);
-    }
-
-    /**
-     * Runs the third simulation.
-     */
-    private static void runSimulation3() {
-
-        /*
-         * Create a simulation object. Set the advance and decline thresholds
-         * to invariate values.
-         */
-        final RebalanceSimulation simulation = new RebalanceSimulation();
-        simulation.setAdvanceThreshold(0.11);
-        simulation.setDeclineThreshold(-0.10);
-
-        /*
-         * Set the discretionary, fixed and zero parameters of the simulation
-         * to invariate values.
-         */
-        simulation.setDiscretionary(0.024);
-        simulation.setFixed(0.015);
-        simulation.setZero(stockHigh + 0.02);
-
-        // Try to create a file writer.
-        try (final FileWriter writer = new FileWriter(new File("data",
-                "rebalance_simulation.csv"))) {
-
-            // Write the header.
-            writer.write("discretionary,fixed,high,bear,advance,decline," +
-                    "value,draw\n");
-
-            // Run the simulation by randomly varying the high and bear values.
-            start = new Date();
-            runRandomHighAndBear(simulation, writer);
-        }
-
-        /*
-         * Catch any I/O exception that may occur, and output a message to
-         * system error.
-         */ catch (IOException exception) {
-            System.err.printf("A writer for the simulations could not be " +
-                    "created; message is: '%s'.", exception.getMessage());
-        }
-    }
-
-    /**
-     * Runs a series of simulations.
-     *
-     * @param wideSpan True if the range of discretionary value should be
-     *                 'wide'; false otherwise
-     */
-    private static void runSimulations(boolean wideSpan) {
-
-        // Create a simulation object and set its invariate parameters.
-        final RebalanceSimulation simulation = new RebalanceSimulation();
-        simulation.setZero(stockHigh + 0.02);
-
-        // Try to create a file writer, then run the simulation.
-        try {
-
-            // Create the file writer
-            final FileWriter writer = new FileWriter(new File("data",
-                    "rebalance_simulation.csv"));
-
-            // Write the header.
-            writer.write("discretionary,fixed,high,bear,advance,decline," +
-                    "value,draw\n");
-
-            // Run the simulations by varying discretionary. Close the writer.
-            start = new Date();
-            varyDiscretionary(simulation, writer, wideSpan);
-            writer.close();
-        }
-
-        /*
-         * Catch any I/O exception that may occur, and output a message to
-         * system error.
-         */ catch (IOException exception) {
-            System.err.printf("A writer for the simulations could not be " +
-                    "created; message is: '%s'.", exception.getMessage());
-        }
-    }
-
-    /**
-     * Varies the advance threshold.
-     *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive simulation parameters and output
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void varyAdvance(@NotNull RebalanceSimulation simulation,
-                                    @NotNull FileWriter writer)
-            throws IOException {
-
-        // Cycle through the well-known advance threshold range.
-        for (double advanceThreshold = 0.06; advanceThreshold < 0.11;
-             advanceThreshold += 0.01) {
-
-            // Set the advance threshold, and vary the decline threshold.
-            simulation.setAdvanceThreshold(advanceThreshold);
-            varyDecline(simulation, writer);
-        }
-    }
-
-    /**
-     * Varies the bear market.
-     *
-     * @param simulation The simulation to run
-     * @param start      The start of the bear market parameter (inclusive)
-     * @param end        The end of the bear market parameter (exclusive)
-     * @param writer     A writer to receive simulation parameters and output
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void varyBear(@NotNull RebalanceSimulation simulation,
-                                 double start,
-                                 @SuppressWarnings("SameParameterValue")
-                                 double end,
-                                 @NotNull FileWriter writer)
-            throws IOException {
-
-        // Cycle through the given bear market range.
-        for (double bear = start; bear < end; bear += 0.1) {
-
-            // Set the bear market, and vary the advance threshold.
-            simulation.setBear(bear);
-            varyAdvance(simulation, writer);
-        }
-    }
-
-    /**
-     * Varies the decline threshold and runs the simulation.
-     *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive simulation parameters and output
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void varyDecline(@NotNull RebalanceSimulation simulation,
-                                    @NotNull FileWriter writer)
-            throws IOException {
-
-        // Cycle through the well-known decline threshold range.
-        for (double declineThreshold = -0.02; declineThreshold > -0.12;
-             declineThreshold -= 0.01) {
-
-            /*
-             * Set the decline threshold. Run the simulation, and write about
-             * it.
-             */
-            simulation.setDeclineThreshold(declineThreshold);
-            runAndWrite(simulation, writer);
-        }
-    }
-
-    /**
-     * Varies discretionary.
-     *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive simulation parameters and output
-     * @param wideSpan   True if the range of discretionary value should be
-     *                   'wide'; false otherwise
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void varyDiscretionary(
-            @NotNull RebalanceSimulation simulation,
-            @NotNull FileWriter writer,
-            boolean wideSpan)
-            throws IOException {
-
-        /*
-         * Declare and initialize the increment and the start based on the
-         * wide-span argument.
-         */
-        final double increment = wideSpan ? 0.00125 : 0.0005;
-        final double start = wideSpan ? 0. : 0.015;
-
-        // Cycle through the well-known discretionary range.
-        for (double discretionary = start; discretionary < 0.025;
-             discretionary += increment) {
-
-            // Set the discretionary, and vary fixed.
-            simulation.setDiscretionary(discretionary);
-            varyFixed(simulation, writer, wideSpan);
-        }
-    }
-
-    /**
-     * Varies fixed.
-     *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive simulation parameters and output
-     * @param wideSpan   True if the range of fixed values should be 'wide';
-     *                   false otherwise
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void varyFixed(@NotNull RebalanceSimulation simulation,
-                                  @NotNull FileWriter writer,
-                                  boolean wideSpan)
-            throws IOException {
-
-        /*
-         * Declare and initialize the increment and the start range based on
-         * the wide-span argument.
-         */
-        final double increment = wideSpan ? 0.00125 : 0.0005;
-        final double startRange = wideSpan ? 0. : 0.015;
-
-        // Cycle through the well-known fixed range.
-        Date now;
-        for (double fixed = startRange; fixed < 0.025; fixed += increment) {
-
-            // Set the fixed, and vary high.
-            simulation.setFixed(fixed);
-            varyHigh(simulation, writer);
-
-            // Do a checkpoint.
-            now = new Date();
-            System.out.printf("Discretionary: %f; Fixed: %f; Elapsed Time: " +
-                            "%s seconds%n",
-                    simulation.getDiscretionary(), simulation.getFixed(),
-                    twoDigitFormat.format((now.getTime() - start.getTime()) /
-                            1000.));
-        }
-    }
-
-    /**
-     * Varies the high market.
-     *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive simulation parameters and output
-     * @throws IOException Indicates simulation parameters and output could not
-     *                     be written
-     */
-    private static void varyHigh(@NotNull RebalanceSimulation simulation,
-                                 @NotNull FileWriter writer)
-            throws IOException {
-
-        // Declare constants.
-        final double offset = 0.01, highEnd = stockHigh,
-                bearEnd = highEnd + offset;
-
-        // Cycle through the well-known high market range.
-        for (double high = 0.4, bear = high + offset; high < highEnd;
-             high = bear, bear = high + offset) {
-
-            // Set the high market, and vary the bear market.
-            simulation.setHigh(high);
-            varyBear(simulation, bear, bearEnd, writer);
-        }
+    public static double getInitialValue() {
+        return Math.pow(10., 6);
     }
 
     /**
@@ -617,10 +147,10 @@ public class RebalanceSimulation {
     }
 
     /**
-     * Gets the discretionary annual percent of the portfolio for withdraw.
+     * Gets the discretionary annual percent of the portfolio for addition.
      *
      * @return The discretionary annual percent of the portfolio
-     * for withdraw
+     * for addition
      */
     public double getDiscretionary() {
         return discretionary;
@@ -636,9 +166,9 @@ public class RebalanceSimulation {
     }
 
     /**
-     * Gets the fixed annual percent of the portfolio for withdraw (with COLA).
+     * Gets the fixed annual percent of the portfolio for addition (with COLA).
      *
-     * @return The fixed annual percent of the portfolio for withdraw
+     * @return The fixed annual percent of the portfolio for addition
      * (with COLA)
      */
     public double getFixed() {
@@ -727,7 +257,7 @@ public class RebalanceSimulation {
      * @return The value of the portfolio at the end of the simulation
      */
     @SuppressWarnings("UnusedReturnValue")
-    private double run(@SuppressWarnings("SameParameterValue") boolean noisy) {
+    public double run(@SuppressWarnings("SameParameterValue") boolean noisy) {
 
         /*
          * Set the 'x' values of the adjuster based on the initial market high.
@@ -741,7 +271,7 @@ public class RebalanceSimulation {
          * Set the initial value of the portfolio, and update its
          * discretionary portion.
          */
-        portfolio.setValue(1000000.0);
+        portfolio.setValue(getInitialValue());
         updateDiscretionaryPortion();
 
         // Initialize the fixed portion of the draw. Clear the total draw.
@@ -792,7 +322,7 @@ public class RebalanceSimulation {
              * Update the value of the portfolio using the monthly data and the
              * draw. Are we noisy?
              */
-            portfolio.incrementMonth(data, -draw, getAdvanceThreshold(),
+            portfolio.incrementMonth(data, draw, getAdvanceThreshold(),
                     getDeclineThreshold(), adjuster.f(sAndP500),
                     remainderFractionBond);
             if (noisy) {
@@ -858,19 +388,19 @@ public class RebalanceSimulation {
     }
 
     /**
-     * Sets the discretionary annual percent of the portfolio for withdraw.
+     * Sets the discretionary annual percent of the portfolio for addition.
      *
      * @param discretionary The discretionary annual percent of the portfolio
-     *                      for withdraw
+     *                      for addition
      */
     public void setDiscretionary(double discretionary) {
         this.discretionary = discretionary;
     }
 
     /**
-     * Sets the fixed annual percent of the portfolio for withdraw (with COLA).
+     * Sets the fixed annual percent of the portfolio for addition (with COLA).
      *
-     * @param fixed The fixed annual percent of the portfolio for withdraw
+     * @param fixed The fixed annual percent of the portfolio for addition
      *              (with COLA)
      */
     public void setFixed(double fixed) {
