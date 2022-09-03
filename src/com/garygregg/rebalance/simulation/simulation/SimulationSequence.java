@@ -1,6 +1,8 @@
 package com.garygregg.rebalance.simulation.simulation;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.text.DecimalFormat;
@@ -15,6 +17,11 @@ public class SimulationSequence implements Runnable {
      * Parameter advancement order: discretionary, fixed, high, bear, advance,
      * decline.
      */
+
+    // Default arguments
+    private static final String[] defaultArguments = {"0",
+            "RebalanceSimulation_in.csv", "RebalanceSimulation_out.csv",
+            "RebalanceSimulation_win.csv"};
 
     // The number of default iterations
     private static final int defaultIterations = 1;
@@ -70,6 +77,24 @@ public class SimulationSequence implements Runnable {
 
     {
         initialize();
+    }
+
+    /**
+     * Gets an argument from an argument array, or a default argument if an
+     * explicit argument is not specified.
+     *
+     * @param arguments The argument array
+     * @param index     The index of the argument to get
+     * @return The specified argument, or a default argument, or null if the
+     * index is not valid
+     */
+    @Contract(pure = true)
+    private static @Nullable String getArgument(
+            @NotNull String[] arguments, int index) {
+        return (0 < index) ? ((index < arguments.length) ?
+                arguments[index] :
+                ((index < defaultArguments.length) ?
+                        defaultArguments[index] : null)) : null;
     }
 
     /**
@@ -177,6 +202,36 @@ public class SimulationSequence implements Runnable {
         catch (@NotNull IOException exception) {
             System.err.println(exception.getMessage());
         }
+    }
+
+    /**
+     * Reads a qualification window object from a well-formatted buffered
+     * reader.
+     *
+     * @param reader A buffered reader
+     * @return A qualification window object read from the reader
+     * @throws ArrayIndexOutOfBoundsException Indicates that not all the
+     *                                        required elements are in a line
+     *                                        read from the reader
+     * @throws IOException                    Indicates a problem reading from
+     *                                        the reader
+     * @throws NumberFormatException          Indicates a line element does
+     *                                        not contain a well-formatted
+     *                                        floating point number
+     */
+    private static @NotNull Pair<Double, Double>
+    readWindow(@NotNull BufferedReader reader)
+            throws ArrayIndexOutOfBoundsException, IOException,
+            NumberFormatException {
+
+        /*
+         * Read a line from the reader, and split it around commas. Parse the
+         * first two elements as doubles when creating the qualification window
+         * object.
+         */
+        final String[] parameters = reader.readLine().split(",");
+        return new Pair<>(Double.parseDouble(parameters[0].trim()),
+                Double.parseDouble(parameters[1].trim()));
     }
 
     /**
