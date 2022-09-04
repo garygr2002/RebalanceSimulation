@@ -10,7 +10,7 @@ library(webshot)
 # ending value is too high.
 #
 if (!(exists('raw') && is.data.frame(get('raw')))) {
-  raw <- read.csv("data/rebalance_simulation.csv", header=TRUE)
+  raw <- read.csv("data/RebalanceSimulation_out.csv", header=TRUE)
 }
 #
 # Place limits on upside limits on the high, and bear market equity
