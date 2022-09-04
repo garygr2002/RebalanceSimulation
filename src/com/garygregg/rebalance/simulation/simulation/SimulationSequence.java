@@ -2,7 +2,6 @@ package com.garygregg.rebalance.simulation.simulation;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.text.DecimalFormat;
@@ -25,6 +24,10 @@ public class SimulationSequence implements Runnable {
 
     // The number of default iterations
     private static final int defaultIterations = 1;
+
+    // The default observation window for acceptable terminal portfolio value
+    private static final Pair<Double, Double> defaultObservationWindow =
+            new Pair<>(Double.MAX_VALUE, Double.MAX_VALUE);
 
     // The default output file name
     private static final String defaultOutput = "RebalanceSimulation_out.csv";
@@ -72,6 +75,9 @@ public class SimulationSequence implements Runnable {
     // Zero parameters
     private final StartEndIncrement zero = getInitial();
 
+    // The observation window for acceptable terminal portfolio value
+    private Pair<Double, Double> observationWindow = defaultObservationWindow;
+
     // The number of desired simulations
     private int simulationCount;
 
@@ -80,21 +86,36 @@ public class SimulationSequence implements Runnable {
     }
 
     /**
-     * Gets an argument from an argument array, or a default argument if an
-     * explicit argument is not specified.
+     * Gets an argument from an argument array, or returns a default argument
+     * if an explicit argument is not specified.
      *
      * @param arguments The argument array
      * @param index     The index of the argument to get
-     * @return The specified argument, or a default argument, or null if the
-     * index is not valid
+     * @return The specified argument, or a default argument
+     * @throws IllegalArgumentException Indicates no explicit argument given,
+     *                                  and no default argument available
      */
     @Contract(pure = true)
-    private static @Nullable String getArgument(
-            @NotNull String[] arguments, int index) {
-        return (0 < index) ? ((index < arguments.length) ?
-                arguments[index] :
-                ((index < defaultArguments.length) ?
-                        defaultArguments[index] : null)) : null;
+    private static @NotNull String getArgument(@NotNull String[] arguments,
+                                               int index)
+            throws IllegalArgumentException {
+
+        // Get the argument for the specified index.
+        final String argument = (0 <= index) ? ((index < arguments.length) ?
+                arguments[index] : ((index < defaultArguments.length) ?
+                defaultArguments[index] : null)) : null;
+
+        /*
+         * Throw an illegal argument exception if no explicit argument is
+         * given, and there is no default argument available.
+         */
+        if (null == argument) {
+            throw new IllegalArgumentException(String.format("No argument " +
+                    "given for index %d, and no default available", index));
+        }
+
+        // Return the non-null argument.
+        return argument;
     }
 
     /**
@@ -130,76 +151,27 @@ public class SimulationSequence implements Runnable {
      */
     public static void main(@NotNull String @NotNull [] arguments) {
 
-        // Get the argument count. Try to run the simulations.
-        final int argumentCount = arguments.length;
+        /*
+         * Try to do things that might throw an I/O exception, or number format
+         * exception...
+         */
         try {
 
             /*
-             * Declare the default input file name. Are there one or more
-             * command line arguments?
+             * ...and this basically just means getting the arguments, and
+             * running the simulation.
              */
-            final String defaultInput = "RebalanceSimulation_in.csv";
-            if (0 < argumentCount) {
-
-                // There are one or more command line arguments.
-                try {
-
-                    /*
-                     * Try to parse the first command line argument as the
-                     * number of simulations to run. Are there more than two
-                     * arguments?
-                     */
-                    final int simulationCount = Integer.parseInt(arguments[0]);
-                    if (2 < argumentCount) {
-
-                        /*
-                         * There are more than two arguments. Run the requested
-                         * number of simulations with the explicitly given
-                         * input and output file names.
-                         */
-                        run(simulationCount, arguments[1], arguments[2]);
-                    }
-
-                    /*
-                     * Run the requested number of simulations with a default
-                     * output file name if the user specified only two command
-                     * line arguments.
-                     */
-                    else if (1 < argumentCount) {
-                        run(simulationCount, arguments[1], defaultOutput);
-                    }
-
-                    /*
-                     * Run the requested number of simulations with default
-                     * input and output file names if the user specified only
-                     * one command line argument.
-                     */
-                    else {
-                        run(simulationCount, defaultInput, defaultOutput);
-                    }
-                }
-
-                /*
-                 * Catch any number format exception that results from a non-integer
-                 * first argument.
-                 */ catch (@NotNull NumberFormatException exception) {
-                    System.err.printf("Could not parse argument '%s' as an " +
-                            "integer.%n", arguments[0]);
-                }
-            }
-
-            /*
-             * Run a default number of simulations with default input and
-             * output file names if the user specified no command line
-             * arguments.
-             */
-            else {
-                run(0, defaultInput, defaultOutput);
-            }
+            run(Integer.parseInt(getArgument(arguments, 0)),
+                    getArgument(arguments, 1),
+                    getArgument(arguments, 2),
+                    readWindow(getArgument(arguments, 3)));
         }
 
-        // Catch any I/O exception
-        catch (@NotNull IOException exception) {
+        /*
+         * Catch any I/O exception or number format exception. Print the
+         * message of the exception to system error stream.
+         */ catch (@NotNull IOException |
+                            @NotNull NumberFormatException exception) {
             System.err.println(exception.getMessage());
         }
     }
@@ -232,6 +204,27 @@ public class SimulationSequence implements Runnable {
         final String[] parameters = reader.readLine().split(",");
         return new Pair<>(Double.parseDouble(parameters[0].trim()),
                 Double.parseDouble(parameters[1].trim()));
+    }
+
+    /**
+     * Reads a qualification window object from a well-formatted file with the
+     * given file name.
+     *
+     * @param filename The given file name.
+     * @return A qualification window object read from the file
+     * @throws ArrayIndexOutOfBoundsException Indicates that not all the
+     *                                        required elements are in a line
+     *                                        read from the reader
+     * @throws IOException                    Indicates a problem reading from
+     *                                        the reader
+     * @throws NumberFormatException          Indicates a line element does
+     *                                        not contain a well-formatted
+     *                                        floating point number
+     */
+    private static @NotNull Pair<Double, Double>
+    readWindow(@NotNull String filename) throws IOException {
+        return readWindow(new BufferedReader(new FileReader(
+                new File(ioDirectory, filename))));
     }
 
     /**
@@ -275,13 +268,16 @@ public class SimulationSequence implements Runnable {
     /**
      * Runs a sequence of simulations.
      *
-     * @param simulationCount The number of simulations to run
-     * @param input           The name of the parameter input file
-     * @param output          The name of the simulation output file
+     * @param simulationCount   The number of simulations to run
+     * @param input             The name of the simulation input file
+     * @param output            The name of the simulation output file
+     * @param observationWindow The observation window that qualifies
+     *                          termination portfolio value
      * @throws IOException Indicates a problem reading from the input file
      */
     private static void run(int simulationCount, @NotNull String input,
-                            @NotNull String output)
+                            @NotNull String output,
+                            @NotNull Pair<Double, Double> observationWindow)
             throws IOException {
 
         /*
@@ -292,10 +288,11 @@ public class SimulationSequence implements Runnable {
                 new File(ioDirectory, input)))) {
 
             /*
-             * Create a simulation sequence object and set its simulation
-             * count.
+             * Create a simulation sequence object. Set the observation window
+             * and the simulation count of the sequence.
              */
             final SimulationSequence sequence = new SimulationSequence();
+            sequence.setObservationWindow(observationWindow);
             sequence.setSimulationCount(simulationCount);
 
             /*
@@ -361,37 +358,30 @@ public class SimulationSequence implements Runnable {
     /**
      * Runs a simulation, and writes the result.
      *
-     * @param simulation The simulation to run
-     * @param writer     A writer to receive output
-     * @param format     The format for recording the simulation results
+     * @param simulation        The simulation to run
+     * @param writer            A writer to receive output
+     * @param format            The format for recording the simulation results
+     * @param observationWindow The observation window for acceptable terminal
+     *                          portfolio value
      * @return The number of simulation iterations to increment
      * @throws IOException Indicates an error writing output
      */
     private static int runAndWrite(
             @NotNull RebalanceSimulation simulation,
-            @NotNull FileWriter writer, @NotNull String format)
+            @NotNull FileWriter writer, @NotNull String format,
+            @NotNull Pair<Double, Double> observationWindow)
             throws IOException {
 
         /*
-         * Get the initial value of the simulation. Set the minimum terminal
-         * value required to record the simulation.
+         * Run the simulation, receiving a portfolio terminal value. Determine
+         * the number of simulation iterations to increment.
          */
-        final double initialValue = RebalanceSimulation.getInitialValue();
-        final double minValue = initialValue * 9.;
-
-        /*
-         * Set the maximum terminal value required to record the simulation.
-         * Run the simulation, and receive the terminal value of the portfolio.
-         */
-        final double maxValue = initialValue * 10.;
         final double terminalValue = simulation.run(false);
+        final int increment =
+                ((terminalValue < observationWindow.getFirst()) ||
+                        (observationWindow.getSecond() < terminalValue)) ? 0 : 1;
 
-        /*
-         * Determine the number of simulation iterations to increment. Is the
-         * number of iterations to increment greater than zero?
-         */
-        final int increment = ((terminalValue < minValue) ||
-                (maxValue < terminalValue)) ? 0 : 1;
+        // Is the number of iterations to increment greater than zero?
         if (0 < increment) {
 
             /*
@@ -657,6 +647,15 @@ public class SimulationSequence implements Runnable {
     }
 
     /**
+     * Gets the observation window for acceptable terminal portfolio value.
+     *
+     * @return The observation window for acceptable terminal portfolio value
+     */
+    public @NotNull Pair<Double, Double> getObservationWindow() {
+        return observationWindow;
+    }
+
+    /**
      * Gets the number of desired simulations.
      *
      * @return The number of desired simulations
@@ -799,7 +798,8 @@ public class SimulationSequence implements Runnable {
              * increment. Are we at the report threshold with the current
              * iteration?
              */
-            increment = runAndWrite(simulation, writer, csvFormat);
+            increment = runAndWrite(simulation, writer, csvFormat,
+                    getObservationWindow());
             if (0 == (iteration % reportThreshold)) {
 
                 /*
@@ -1119,6 +1119,17 @@ public class SimulationSequence implements Runnable {
         iterations.set(index, previous * (incrementOkay(increment) ?
                 (int) ((sei.getEnd() - sei.getStart()) / increment + 1) :
                 defaultIterations));
+    }
+
+    /**
+     * Sets the observation window for acceptable terminal portfolio value.
+     *
+     * @param observationWindow The observation window for acceptable terminal
+     *                          portfolio value
+     */
+    private void setObservationWindow(
+            @NotNull Pair<Double, Double> observationWindow) {
+        this.observationWindow = observationWindow;
     }
 
     /**
